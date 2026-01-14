@@ -14,6 +14,8 @@ html {
   padding: 0;
 }
 
+
+
 body {
   color: #333;
   background: #fff;
@@ -22,6 +24,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-weight: 400;
+   padding-top: 50px; /* مسافة من فوق علشان الهيدر */
 }
 
 img {
@@ -149,15 +152,18 @@ a:focus {
   right: 0;
   top: 0;
   z-index: 9999;
-  background: #f9e2f2;
-  box-shadow: 0 0 8px 0px rgba(0, 0, 0, 0.1);
+  /*background: #a11d7a;   دول كانوا سبب فى خط بينك رفيع بالعرض
+  box-shadow: 0 0 8px 0px rgba(0, 0, 0, 0.1);*/
   transition: all 0.5s linear;
 }
 
 #header .navbar {
-  padding: 0;
+  padding: 13px 0; /* دى اللى ظبططت طول الهيدر كان صغير */
   justify-content: space-between;
-  background: none !important;
+   background: #fcddf3;
+   box-shadow: 0 0 8px 0px rgba(0, 0, 0, 0.1);
+ 
+     
 }
 
 #header .navbar-brand {
@@ -167,8 +173,37 @@ a:focus {
   height: auto;
   padding: 0;
    font-size: 16px;
-  line-height: 1.6;
+  line-height: 0.7;
+  
+
 }
+.custom-nav-link {
+    /*position: relative;
+    border: none;
+    background: transparent;*/
+   
+    margin: 0 4px;
+    color: #1a237e ;
+    
+   
+}
+.custom-nav-link:hover {
+   
+    background-color: #ff00d4;
+    border-radius: 20px;
+    -webkit-border-radius: 20px;
+    -moz-border-radius: 20px;
+    -ms-border-radius: 20px;
+    -o-border-radius: 20px;
+}
+.custom-nav-link.active {
+    
+    font-weight: bold;
+    background-color: #fa75e8;
+    border-radius: 20px;
+}
+
+
 
 #header .navbar-collapse {
   flex-grow: 0;
@@ -184,7 +219,7 @@ a:focus {
   padding-right: 0;
 }
 
-#header .navbar-collapse a {
+/*#header .navbar-collapse a {
   color: #1a237e;
   position: relative;
 }
@@ -215,11 +250,9 @@ a:focus {
   opacity: 0;
 }
 
-
-
 /*Hero*/
 .hero-block {
-  margin: 65px 0 0;
+  margin: 35px 0 0;
 }
 
 
@@ -778,6 +811,7 @@ textarea {
 }
 
 @media (max-width:768px){
+ 
   h2 {
     font-size: 20px;
   }
