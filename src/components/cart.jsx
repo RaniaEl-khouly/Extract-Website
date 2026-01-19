@@ -3,218 +3,377 @@ import React, { useState, useEffect } from 'react';
 const AppCart = () => {
     const [cart, setCart] = useState([]);
     const [isCartOpen, setIsCartOpen] = useState(false);
-
-    // 🔧 نجيب السلة من localStorage لما المكون يتحمل
+    const [hasLoaded, setHasLoaded] = useState(false);
+    
+    // مفتاح التخزين (غير extractCart عشان نتجنب main.jsx)
+    const STORAGE_KEY = 'shopping_cart_v3';
+    
+    // 🔧 تحميل السلة - استخدم try/catch بسيط
     useEffect(() => {
-        const loadCart = () => {
-            try {
-                const savedCart = localStorage.getItem('extractCart');
-                console.log('📦 localStorage content:', savedCart);
-                
-                if (savedCart) {
-                    const parsedCart = JSON.parse(savedCart);
-                    console.log('✅ Parsed cart:', parsedCart);
-                    setCart(parsedCart);
-                } else {
-                    console.log('🆕 No cart found, starting empty');
-                    setCart([]);
-                }
-            } catch (error) {
-                console.error('❌ Error loading cart:', error);
-                setCart([]);
-            }
-        };
-
-        loadCart();
+        if (hasLoaded) return;
         
-        // نسمع لأي تغييرات في localStorage من نافذة أخرى
-        window.addEventListener('storage', loadCart);
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            console.log('📥 محاولة تحميل:', saved ? 'يوجد بيانات' : 'لا يوجد');
+            
+            if (saved && saved !== '[]' && saved !== 'null') {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    // تأكد من صحة البيانات
+                    const validCart = parsed.filter(item => 
+                        item && item.id && item.name && item.price
+                    );
+                    
+                    if (validCart.length > 0) {
+                        setCart(validCart);
+                        console.log('✅ تم تحميل السلة:', validCart.length, 'منتج');
+                    }
+                }
+            }
+        } catch (err) {
+            console.log('⚠️ خطأ في التحميل، بدء جديد');
+        } finally {
+            setHasLoaded(true);
+        }
+    }, [hasLoaded]);
+    
+    // 🔧 حفظ السلة - بدون removeItem أبداً
+    useEffect(() => {
+        if (!hasLoaded) return;
+        
+        console.log('💾 حالة الحفظ:', cart.length > 0 ? 'يوجد منتجات' : 'فارغة');
+        
+        try {
+            // دايماً استخدم setItem فقط
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(cart));
+            
+            // للسلة الفارغة، احفظ أيضاً في sessionStorage
+            if (cart.length === 0) {
+                sessionStorage.setItem(STORAGE_KEY + '_empty', 'true');
+            } else {
+                sessionStorage.removeItem(STORAGE_KEY + '_empty');
+            }
+        } catch (err) {
+            // تجاهل الأخطاء
+            console.log('⚠️ تجاهل خطأ الحفظ');
+        }
+    }, [cart, hasLoaded]);
+    
+    // 🛒 إضافة منتج للسلة
+    const addToCart = (product) => {
+        if (!product?.id) return;
+        
+        setCart(prev => {
+            // معالجة المنتج
+            const fixedProduct = {
+                id: product.id,
+                name: product.name || product.title || 'منتج',
+                price: typeof product.price === 'number' ? product.price : 
+                      parseInt(product.price) || 150,
+                quantity: 1,
+                image: product.image || ''
+            };
+            
+            // البحث عن المنتج الموجود
+            const existingIndex = prev.findIndex(item => item.id === fixedProduct.id);
+            
+            if (existingIndex >= 0) {
+                // زيادة الكمية
+                const newCart = [...prev];
+                newCart[existingIndex] = {
+                    ...newCart[existingIndex],
+                    quantity: newCart[existingIndex].quantity + 1
+                };
+                return newCart;
+            }
+            
+            // إضافة جديد
+            return [...prev, fixedProduct];
+        });
+    };
+    
+    // 🌐 تعريف دالة الإضافة للاستخدام الخارجي
+    useEffect(() => {
+        if (!hasLoaded) return;
+        
+        window.addToCartGlobal = (product) => {
+            console.log('🛍️ إضافة من خارجي:', product?.name || product?.title);
+            addToCart(product);
+        };
         
         return () => {
-            window.removeEventListener('storage', loadCart);
+            delete window.addToCartGlobal;
         };
-    }, []);
-
-    // 🔧 نحفظ السلة في localStorage مع كل تغيير
-    useEffect(() => {
-        console.log('💾 Saving cart to localStorage:', cart);
-        localStorage.setItem('extractCart', JSON.stringify(cart));
-    }, [cart]);
-
-    // إضافة منتج للسلة
-    const addToCart = (product) => {
-        setCart(prevCart => {
-            const existingProduct = prevCart.find(item => item.id === product.id);
-            let newCart;
-
-            if (existingProduct) {
-                newCart = prevCart.map(item =>
-                    item.id === product.id 
-                        ? { ...item, quantity: item.quantity + 1 }
-                        : item
-                );
-            } else {
-                newCart = [...prevCart, {
-                    id: product.id,
-                    name: product.title,
-                    price: 150,
-                    quantity: 1,
-                    image: product.image
-                }];
-            }
-
-            console.log('🛒 New cart after addition:', newCart);
-            return newCart;
-        });
-    };
-
-    // نجعل الدوال متاحة للاستخدام الخارجي
-    useEffect(() => {
-        window.addToCartGlobal = addToCart;
-        console.log('🌐 Global functions registered');
-    }, []);
-
-    // حذف منتج من السلة
+    }, [addToCart, hasLoaded]);
+    
+    // 🗑️ حذف منتج
     const removeFromCart = (productId) => {
-        setCart(prevCart => {
-            const newCart = prevCart.filter(item => item.id !== productId);
-            console.log('🗑️ Cart after removal:', newCart);
-            return newCart;
-        });
+        setCart(prev => prev.filter(item => item.id !== productId));
     };
-
-    // تحديث الكمية
+    
+    // 📊 تحديث الكمية
     const updateQuantity = (productId, newQuantity) => {
         if (newQuantity < 1) {
             removeFromCart(productId);
             return;
         }
         
-        setCart(prevCart => {
-            const newCart = prevCart.map(item =>
-                item.id === productId 
-                    ? { ...item, quantity: newQuantity }
-                    : item
-            );
-            console.log('📊 Cart after quantity update:', newCart);
-            return newCart;
-        });
+        setCart(prev => 
+            prev.map(item => 
+                item.id === productId ? { ...item, quantity: newQuantity } : item
+            )
+        );
     };
-
+    
+    // 🔼 زيادة الكمية
+    const increaseQuantity = (productId) => {
+        const item = cart.find(item => item.id === productId);
+        if (item) updateQuantity(productId, item.quantity + 1);
+    };
+    
+    // 🔽 تقليل الكمية
+    const decreaseQuantity = (productId) => {
+        const item = cart.find(item => item.id === productId);
+        if (item?.quantity > 1) {
+            updateQuantity(productId, item.quantity - 1);
+        } else {
+            removeFromCart(productId);
+        }
+    };
+    
+    // 🧮 الحسابات
     const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
-
+    
+    // مسح السلة
+    const clearCart = () => {
+        if (cart.length === 0 || window.confirm('هل تريد مسح السلة بالكامل؟')) {
+            setCart([]);
+        }
+    };
+    
+    // 🎨 واجهة بسيطة ومضمونة
     return (
         <>
-            {/* زر السلة في ال Navbar */}
+            {/* زر السلة */}
             <button 
-                className="cart-btn btn btn-outline-primary position-relative"
                 onClick={() => setIsCartOpen(true)}
-                style={{ border: 'none', background: 'transparent' }}
+                style={{
+                    border: 'none',
+                    background: 'transparent',
+                    fontSize: '1.5rem',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    padding: '8px'
+                }}
             >
-                🛒 
+                🛒
                 {totalItems > 0 && (
-                    <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                    <span style={{
+                        position: 'absolute',
+                        top: '0',
+                        right: '0',
+                        background: '#dc3545',
+                        color: 'white',
+                        borderRadius: '50%',
+                        width: '20px',
+                        height: '20px',
+                        fontSize: '0.7rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}>
                         {totalItems}
                     </span>
                 )}
             </button>
-
+            
             {/* نافذة السلة */}
             {isCartOpen && (
-                <div className="cart-overlay"
+                <div 
                     style={{
                         position: 'fixed',
                         top: 0,
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        backgroundColor: 'rgba(0,0,0,0.5)',
-                        zIndex: 1050
+                        background: 'rgba(0,0,0,0.5)',
+                        zIndex: 1000
                     }}
+                    onClick={() => setIsCartOpen(false)}
                 >
-                    <div className="cart-sidebar"
+                    <div 
                         style={{
                             position: 'fixed',
                             top: 0,
                             right: 0,
-                            width: '400px',
+                            width: '350px',
                             height: '100%',
-                            backgroundColor: 'white',
-                            boxShadow: '-2px 0 10px rgba(0,0,0,0.1)',
+                            background: 'white',
                             padding: '20px',
                             overflowY: 'auto'
                         }}
+                        onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="cart-header d-flex justify-content-between align-items-center mb-4">
-                            <h3>🛒 سلة التسوق ({totalItems})</h3>
+                        {/* الرأس */}
+                        <div style={{ 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center',
+                            marginBottom: '20px'
+                        }}>
+                            <h5 style={{ margin: 0 }}>🛒 سلة التسوق ({totalItems})</h5>
                             <button 
-                                className="close-btn btn btn-sm btn-outline-secondary"
                                 onClick={() => setIsCartOpen(false)}
+                                style={{
+                                    border: 'none',
+                                    background: 'none',
+                                    fontSize: '1.5rem',
+                                    cursor: 'pointer'
+                                }}
                             >
                                 ✕
                             </button>
                         </div>
                         
-                        {/* عناصر السلة */}
-                        <div className="cart-items">
-                            {cart.length === 0 ? (
-                                <div className="text-center">
-                                    <p className="empty-cart text-muted">السلة فارغة</p>
-                                    <small className="text-info">جربي تضيفي منتجات من صفحة المنتجات</small>
-                                </div>
-                            ) : (
-                                cart.map(item => (
-                                    <div key={item.id} className="cart-item border-bottom pb-3 mb-3">
-                                        <div className="d-flex justify-content-between align-items-start">
-                                            <div className="item-info flex-grow-1">
-                                                <strong>{item.name}</strong>
-                                                <p className="mb-1 text-success">{item.price} جنيه</p>
-                                                <small className="text-muted">الكمية: {item.quantity}</small>
+                        {/* المحتوى */}
+                        {cart.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                                <p>السلة فارغة</p>
+                            </div>
+                        ) : (
+                            <>
+                                {/* المنتجات */}
+                                {cart.map(item => (
+                                    <div 
+                                        key={item.id}
+                                        style={{
+                                            padding: '10px',
+                                            borderBottom: '1px solid #eee',
+                                            marginBottom: '10px'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <div>
+                                                <div style={{ fontWeight: 'bold' }}>{item.name}</div>
+                                                <div style={{ color: '#28a745' }}>{item.price} ج.م</div>
                                             </div>
-                                            <div className="item-controls d-flex align-items-center gap-2">
+                                            <button 
+                                                onClick={() => removeFromCart(item.id)}
+                                                style={{
+                                                    border: 'none',
+                                                    background: 'none',
+                                                    color: '#dc3545',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                🗑️
+                                            </button>
+                                        </div>
+                                        
+                                        <div style={{ 
+                                            display: 'flex', 
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            marginTop: '10px'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center' }}>
                                                 <button 
-                                                    className="btn btn-sm btn-outline-secondary"
-                                                    onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                                    onClick={() => decreaseQuantity(item.id)}
+                                                    style={{
+                                                        width: '30px',
+                                                        height: '30px',
+                                                        borderRadius: '50%',
+                                                        border: '1px solid #ddd',
+                                                        background: 'white',
+                                                        cursor: 'pointer'
+                                                    }}
                                                 >
                                                     -
                                                 </button>
-                                                <span className="mx-2 fw-bold">{item.quantity}</span>
+                                                <span style={{ margin: '0 10px', fontWeight: 'bold' }}>
+                                                    {item.quantity}
+                                                </span>
                                                 <button 
-                                                    className="btn btn-sm btn-outline-secondary"
-                                                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                                    onClick={() => increaseQuantity(item.id)}
+                                                    style={{
+                                                        width: '30px',
+                                                        height: '30px',
+                                                        borderRadius: '50%',
+                                                        border: '1px solid #ddd',
+                                                        background: 'white',
+                                                        cursor: 'pointer'
+                                                    }}
                                                 >
                                                     +
                                                 </button>
-                                                <button 
-                                                    className="btn btn-sm btn-outline-danger"
-                                                    onClick={() => removeFromCart(item.id)}
-                                                >
-                                                    🗑️
-                                                </button>
+                                            </div>
+                                            <div style={{ fontWeight: 'bold' }}>
+                                                {item.price * item.quantity} ج.م
                                             </div>
                                         </div>
                                     </div>
-                                ))
-                            )}
-                        </div>
-                        
-                        {cart.length > 0 && (
-                            <div className="cart-footer border-top pt-3">
-                                <p className="total h5 text-center text-primary">الإجمالي: {total} جنيه</p>
-                                <button 
-                                    className="checkout-btn btn btn-success w-100 mt-3"
-                                    onClick={() => {
-                                        if (cart.length === 0) {
-                                            alert("السلة فارغة!");
-                                            return;
-                                        }
-                                        alert(`طلبك يحتوي على ${totalItems} منتجات\nالإجمالي: ${total} جنيه\nسيتم التواصل معك قريباً!`);
-                                    }}
-                                >
-                                    إتمام الطلب
-                                </button>
-                            </div>
+                                ))}
+                                
+                                {/* الإجمالي */}
+                                <div style={{ 
+                                    borderTop: '2px solid #eee',
+                                    paddingTop: '15px',
+                                    marginTop: '20px'
+                                }}>
+                                    <div style={{ 
+                                        display: 'flex', 
+                                        justifyContent: 'space-between',
+                                        marginBottom: '15px',
+                                        fontWeight: 'bold',
+                                        fontSize: '1.1rem'
+                                    }}>
+                                        <span>الإجمالي:</span>
+                                        <span style={{ color: '#28a745' }}>
+                                            {total} ج.م
+                                        </span>
+                                    </div>
+                                    
+                                    <button 
+                                        onClick={() => {
+                                            if (cart.length === 0) {
+                                                alert('السلة فارغة!');
+                                                return;
+                                            }
+                                            alert(`✅ تم تأكيد الطلب!\nالإجمالي: ${total} ج.م`);
+                                            setIsCartOpen(false);
+                                        }}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px',
+                                            background: '#28a745',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '5px',
+                                            cursor: 'pointer',
+                                            fontSize: '1rem',
+                                            marginBottom: '10px'
+                                        }}
+                                    >
+                                        إتمام الشراء
+                                    </button>
+                                    
+                                    <button 
+                                        onClick={clearCart}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px',
+                                            background: 'white',
+                                            color: '#dc3545',
+                                            border: '1px solid #dc3545',
+                                            borderRadius: '5px',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        مسح السلة
+                                    </button>
+                                </div>
+                            </>
                         )}
                     </div>
                 </div>
